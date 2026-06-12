@@ -13,6 +13,7 @@
 // Config (all optional):
 //   codex.effort     - 'low' | 'medium' | 'high' | 'xhigh'     default 'high'
 //   codex.allowWrite - boolean; gates sandbox=workspace-write   default false
+//   codex.enabled    - boolean; exposes the Codex CLI tool      default true
 //
 // Trust model: the user picks effort and grants write access. The agent can
 // request workspace-write, but it only takes effect when codex.allowWrite=true.
@@ -29,7 +30,7 @@
 // gpt-5.5-fast / gpt-5.5-pro need API-key auth; on a subscription, "fast"
 // means gpt-5.5 at low effort.
 
-import type { PluginAPI } from "@ampcode/plugin";
+import type { PluginAPI, Subscription } from "@ampcode/plugin";
 
 const MODEL = "gpt-5.5";
 const EFFORTS = ["low", "medium", "high", "xhigh"] as const;
@@ -38,6 +39,7 @@ const DEFAULT_EFFORT: Effort = "high";
 
 const EFFORT_KEY = "codex.effort";
 const ALLOW_WRITE_KEY = "codex.allowWrite";
+const ENABLED_KEY = "codex.enabled";
 
 // Caps on what flows back into the calling thread's context window.
 const MAX_RESULT_CHARS = 50_000;
@@ -72,6 +74,7 @@ export default function (amp: PluginAPI) {
     return {
       effort: parseEffort(config[EFFORT_KEY]),
       allowWrite: config[ALLOW_WRITE_KEY] === true,
+      enabled: config[ENABLED_KEY] !== false,
     };
   }
 
@@ -81,34 +84,13 @@ export default function (amp: PluginAPI) {
   let inFlight = 0;
   let statusGen = 0;
 
-  async function isSubscriptionEligibleThreadActive() {
-    const activeThread = amp.experimental?.activeThread.current;
-    if (!activeThread || !amp.experimental?.threads) return false;
-
-    try {
-      const agent = await amp.experimental.threads.get(activeThread.id).agent();
-      const definition = agent.definition;
-      if (
-        definition.kind === "builtin-agent" &&
-        (definition.mode === "deep" || definition.mode === "rush")
-      ) {
-        return true;
-      }
-    } catch (error) {
-      amp.logger.log("[codex] failed to inspect active thread agent", error);
-    }
-
-    return false;
-  }
-
   async function refreshStatus() {
     const gen = ++statusGen;
-    const [{ effort }, isSubscriptionActive] = await Promise.all([
-      settings(),
-      isSubscriptionEligibleThreadActive(),
-    ]);
+    const { effort, enabled } = await settings();
     if (gen !== statusGen) return;
-    const base = `Codex ${effort} • GPT ${isSubscriptionActive ? "🟢" : "⚪"}`;
+    const base = enabled
+      ? `🟢 Codex-mode: ${effort}`
+      : "⚪ Codex-mode: off";
     status?.update({
       text:
         inFlight === 0
@@ -120,12 +102,24 @@ export default function (amp: PluginAPI) {
     });
   }
   void refreshStatus();
-  amp.configuration.subscribe(() => void refreshStatus());
-  amp.experimental?.activeThread.subscribe(() => void refreshStatus());
 
   amp.on("session.start", () => {
     void refreshStatus();
   });
+
+  amp.registerCommand(
+    "toggle-codex-mode",
+    {
+      title: "Toggle Codex mode",
+      category: "codex",
+      description: `Enable or disable the Codex CLI tool (${ENABLED_KEY}). Amp modes continue to work normally either way.`,
+    },
+    async (ctx) => {
+      const { enabled } = await settings();
+      await amp.configuration.update({ [ENABLED_KEY]: !enabled }, "global");
+      await ctx.ui.notify(`Codex mode ${enabled ? "disabled" : "enabled"}.`);
+    },
+  );
 
   amp.registerCommand(
     "set-codex-effort",
@@ -149,7 +143,19 @@ export default function (amp: PluginAPI) {
     },
   );
 
-  amp.registerTool({
+  let codexTool: Subscription | undefined;
+
+  async function refreshCodexTool() {
+    const { enabled } = await settings();
+    if (!enabled) {
+      codexTool?.unsubscribe();
+      codexTool = undefined;
+      return;
+    }
+
+    if (codexTool) return;
+
+    codexTool = amp.registerTool({
     name: "codex",
     description:
       `Consult OpenAI ${MODEL} via the Codex CLI (billed to the user's Codex subscription). ` +
@@ -238,6 +244,12 @@ export default function (amp: PluginAPI) {
         void refreshStatus();
       }
     },
+    });
+  }
+  void refreshCodexTool();
+  amp.configuration.subscribe(() => {
+    void refreshCodexTool();
+    void refreshStatus();
   });
 
   amp.registerCommand(
@@ -248,7 +260,7 @@ export default function (amp: PluginAPI) {
       description: `Verify codex is on PATH and logged in; show effective ${MODEL} settings.`,
     },
     async (ctx) => {
-      const [version, login, { effort, allowWrite }] = await Promise.all([
+      const [version, login, { effort, allowWrite, enabled }] = await Promise.all([
         amp.$`codex --version`,
         amp.$`codex login status`,
         settings(),
@@ -257,6 +269,7 @@ export default function (amp: PluginAPI) {
         [
           `codex: ${version.exitCode === 0 ? version.stdout.trim() : "NOT FOUND on PATH"}`,
           `auth: ${login.exitCode === 0 ? login.stdout.trim() : login.stderr.trim() || login.stdout.trim() || "unknown"}`,
+          `mode: ${enabled ? "enabled" : "off"} (palette: codex: toggle codex mode)`,
           `effort: ${effort} (palette: codex: set codex effort)`,
           `write: ${allowWrite ? `enabled via ${ALLOW_WRITE_KEY}` : `read-only (set ${ALLOW_WRITE_KEY}=true to allow)`}`,
         ].join("\n"),
