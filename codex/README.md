@@ -5,17 +5,17 @@ Expose your local Codex CLI / ChatGPT subscription to Amp as an optional `codex`
 The plugin adds a compact status item:
 
 ```text
-🟢 Codex-mode: high
+🟢 codex: high
 ```
 
 or:
 
 ```text
-⚪ Codex-mode: off
+⚪ codex: off
 ```
 
-- `🟢 Codex-mode: <effort>` means the delegated Codex CLI tool is available.
-- `⚪ Codex-mode: off` means Amp can still use `smart`, `deep`, or `rush` normally, but the Codex CLI tool is not exposed.
+- `🟢 codex: <effort>` means the delegated Codex CLI tool is available.
+- `⚪ codex: off` means Amp can still use `smart`, `deep`, or `rush` normally, but the Codex CLI tool is not exposed.
 
 Codex mode is independent of the active Amp mode. You can delegate to Codex from `smart`, `deep`, `rush`, or another mode when Codex mode is enabled.
 

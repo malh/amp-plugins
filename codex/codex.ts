@@ -89,8 +89,8 @@ export default function (amp: PluginAPI) {
     const { effort, enabled } = await settings();
     if (gen !== statusGen) return;
     const base = enabled
-      ? `🟢 Codex-mode: ${effort}`
-      : "⚪ Codex-mode: off";
+      ? `🟢 codex: ${effort}`
+      : "⚪ codex: off";
     status?.update({
       text:
         inFlight === 0
