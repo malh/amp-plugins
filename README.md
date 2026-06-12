@@ -4,4 +4,4 @@ Personal Amp plugins.
 
 ## Plugins
 
-- [Codex](codex/) — exposes the Codex CLI as an Amp tool, with configurable reasoning effort and a status item for Codex/ChatGPT subscription state.
+- [Codex](codex/): exposes the Codex CLI as an optional Amp tool, with configurable reasoning effort, a status item, and a companion skill that guides when and how to delegate work to Codex.

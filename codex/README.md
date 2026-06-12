@@ -2,6 +2,8 @@
 
 Expose your local Codex CLI / ChatGPT subscription to Amp as an optional `codex` tool.
 
+This directory also includes a companion `codex-plugin` skill. The plugin handles the runtime integration: tool registration, configuration, commands, and status. The skill handles the behavioural integration. It describes the intended use of the tool so Amp does not treat `codex` as just another generic command. It tells the harness what kinds of work are worth delegating, how to keep the request bounded, and why Amp still needs to inspect, integrate, and verify the result.
+
 The plugin adds a compact status item:
 
 ```text
@@ -37,11 +39,26 @@ ln -sf "$PWD/codex.ts" ~/.config/amp/plugins/codex.ts
 
 Then reload plugins from Amp's command palette with `plugins: reload`, or restart Amp.
 
+To install the companion skill, copy or symlink it into your user skills directory:
+
+```sh
+mkdir -p ~/.config/agents/skills
+ln -sfn "$PWD/skills/codex-plugin" ~/.config/agents/skills/codex-plugin
+```
+
+The skill is optional, but recommended. It helps Amp decide when Codex delegation is useful and how to scope the request.
+
+You can also run the helper from this directory:
+
+```sh
+skills/codex-plugin/scripts/install-plugin.sh
+```
+
 ## Commands
 
-- `codex: Toggle Codex mode` — expose or hide the Codex CLI tool.
-- `codex: Set Codex effort` — choose `low`, `medium`, `high`, or `xhigh`.
-- `codex: Check Codex CLI auth and settings` — verify the Codex CLI and current plugin settings.
+- `codex: Toggle Codex mode`: expose or hide the Codex CLI tool.
+- `codex: Set Codex effort`: choose `low`, `medium`, `high`, or `xhigh`.
+- `codex: Check Codex CLI auth and settings`: verify the Codex CLI and current plugin settings.
 
 ## Tool
 
@@ -52,6 +69,27 @@ Use codex to review this plan. Keep it read-only.
 ```
 
 By default, Codex runs read-only. Workspace writes are allowed only when `codex.allowWrite` is set to `true` in Amp config and the tool call requests `workspace-write`.
+
+## Companion skill
+
+The companion skill lives at:
+
+```text
+skills/codex-plugin/SKILL.md
+```
+
+It gives Amp guidance for Codex delegation:
+
+- use Codex for bounded plan review, design checks, diff review, debugging, migration risk analysis, and optional delegated implementation
+- prefer read-only Codex calls
+- avoid Codex for trivial work or simple lookups
+- keep Amp responsible for integrating and verifying the result
+
+The skill includes reference files with prompt recipes, delegation patterns, and the safety model:
+
+```text
+skills/codex-plugin/reference/
+```
 
 ## Configuration
 
